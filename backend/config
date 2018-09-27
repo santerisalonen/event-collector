@@ -1,5 +1,5 @@
 # needs to be unique
-PROJECT_NAME=event-collector
+PROJECT_NAME=example-collector-1
 
 # stack configuration
 REGION=eu-west-1

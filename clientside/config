@@ -1,0 +1,4 @@
+# needs to be unique
+PROJECT_NAME=example-tracker-1
+
+REGION=eu-west-1

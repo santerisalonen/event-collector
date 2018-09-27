@@ -1,5 +1,4 @@
-
-PROJECT_NAME=mehi-collect-api
+source config
 
 STAGE=${1:-dev}
 
@@ -14,9 +13,10 @@ aws s3api create-bucket --bucket $BUCKET --region $REGION --acl public-read --cr
 
 set -e
 
+npm install
+
 node minify
 
 aws s3 cp dist/mt.min.js s3://${BUCKET} --region $REGION --acl public-read
-
 
 echo "https://s3.amazonaws.com/${BUCKET}/mt.min.js"

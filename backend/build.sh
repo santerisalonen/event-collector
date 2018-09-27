@@ -46,3 +46,6 @@ aws apigateway create-deployment \
 
 # TEST
 node test/test $API_ENDPOINT $BUCKET_NAME
+
+
+echo "API endpoint: ${API_ENDPOINT}"
