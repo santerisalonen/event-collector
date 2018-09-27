@@ -13,6 +13,7 @@ aws s3 mb s3://${BUILD_BUCKET} --region $REGION
 # halt execution if commands return non-zero exit code
 # set -e
 
+npm install
 
 # make build dir for artifacts
 rm -rf build
