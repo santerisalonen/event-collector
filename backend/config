@@ -1,5 +1,5 @@
 # needs to be unique
-PROJECT_NAME=mehi-collector
+PROJECT_NAME=event-collector
 
 # stack configuration
 REGION=eu-west-1
