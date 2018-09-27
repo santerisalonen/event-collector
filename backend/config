@@ -1,0 +1,10 @@
+# needs to be unique
+PROJECT_NAME=mehi-collector
+
+# stack configuration
+REGION=eu-west-1
+
+# pipeline configuration
+FIREHOSE_BUFFER_SECONDS=60
+FIREHOSE_BUFFER_MB=10
+S3_BUCKET_EXPIRATION_DAYS=7

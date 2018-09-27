@@ -1,0 +1,292 @@
+AWSTemplateFormatVersion: 2010-09-09
+Transform: AWS::Serverless-2016-10-31
+Parameters:
+  StackEnv:
+    Type: String
+    AllowedValues:
+      - dev
+      - prod
+    Default: dev
+  FirehoseBufferMB:
+    Type: Number
+    Default: 10
+  FirehoseBufferSeconds:
+    Type: Number
+    Default: 60
+  S3BucketExpirationDays:
+    Type: Number
+    Default: 7
+
+Resources:
+  CollectApiRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - apigateway.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: 'firehose-putrecord-policy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - firehose:PutRecord
+                Resource: !GetAtt FirehoseStream.Arn
+
+  CollectApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub ${AWS::StackName}
+
+  CollectEndpoint:
+    Type: "AWS::ApiGateway::Resource"
+    Properties:
+      RestApiId: !Ref CollectApi
+      ParentId: !GetAtt CollectApi.RootResourceId
+      PathPart: "collect"
+
+  CollectPostMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ResourceId: !Ref CollectEndpoint
+      RestApiId: !Ref CollectApi
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS
+        Credentials: !GetAtt CollectApiRole.Arn
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:firehose:action/PutRecord"
+
+        IntegrationHttpMethod: POST #for kinesis using POST is required
+        RequestTemplates:
+          application/json: !Sub |
+            #set($allParams = $input.params())
+            #set($data = "{
+              ""method"" : ""$context.httpMethod"",
+              ""userAgent"" : ""$context.identity.userAgent"",
+              ""ip"" : ""$context.identity.sourceIp"",
+              ""requestTime"" : ""$context.requestTime"",
+              ""unixTime"" : ""$context.requestTimeEpoch"",
+              ""header"": {
+                #set($params = $allParams.get('header'))
+                #foreach($paramName in $params.keySet())
+                  ""$paramName"" : ""$util.escapeJavaScript($params.get($paramName))""
+                  #if($foreach.hasNext),#end
+                  #end
+              },
+              ""body"" : ""$util.escapeJavaScript($input.json('$'))"",
+              ""body_v2"" : $input.json('$')
+            }")
+            #set($data = $data.replaceAll("\t", ""))
+            #set($data = $data.replaceAll("\n", ""))
+            #set($data = $data + "
+            ")
+            {
+                "DeliveryStreamName": "${FirehoseStream}",
+                "Record": {
+                    "Data": "$util.base64Encode($data)"
+                }
+            }
+          text/plain: !Sub |
+            #set($allParams = $input.params())
+            #set($data = "{
+              ""method"" : ""$context.httpMethod"",
+              ""userAgent"" : ""$context.identity.userAgent"",
+              ""ip"" : ""$context.identity.sourceIp"",
+              ""requestTime"" : ""$context.requestTime"",
+              ""unixTime"" : ""$context.requestTimeEpoch"",
+              ""header"": {
+                #set($params = $allParams.get('header'))
+                #foreach($paramName in $params.keySet())
+                  ""$paramName"" : ""$util.escapeJavaScript($params.get($paramName))""
+                  #if($foreach.hasNext),#end
+                  #end
+              },
+              ""body"" : ""$util.escapeJavaScript($input.json('$'))"",
+              ""body_v2"" : $input.json('$')
+            }")
+            #set($data = $data.replaceAll("\t", ""))
+            #set($data = $data.replaceAll("\n", ""))
+            #set($data = $data + "
+            ")
+            {
+                "DeliveryStreamName": "${FirehoseStream}",
+                "Record": {
+                    "Data": "$util.base64Encode($data)"
+                }
+            }
+        RequestParameters:
+          integration.request.header.Content-Type: "'application/x-amz-json-1.1'"
+        IntegrationResponses:
+          - StatusCode: 200
+
+      MethodResponses:
+        - StatusCode: 200
+
+  CollectGetMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ResourceId: !Ref CollectEndpoint
+      RestApiId: !Ref CollectApi
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS
+        Credentials: !GetAtt CollectApiRole.Arn
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:firehose:action/PutRecord"
+
+        IntegrationHttpMethod: POST
+        RequestTemplates:
+          application/json: !Sub |
+            #set($allParams = $input.params())
+            #set($data = "{
+              ""method"" : ""$context.httpMethod"",
+              ""userAgent"" : ""$context.identity.userAgent"",
+              ""ip"" : ""$context.identity.sourceIp"",
+              ""requestTime"" : ""$context.requestTime"",
+              ""unixTime"" : ""$context.requestTimeEpoch"",
+              ""header"": {
+                #set($params = $allParams.get('header'))
+                #foreach($paramName in $params.keySet())
+                  ""$paramName"" : ""$util.escapeJavaScript($params.get($paramName))""
+                  #if($foreach.hasNext),#end
+                  #end
+              },
+              ""body"" : ""$util.escapeJavaScript($input.params('data'))"",
+              ""body_v2"" : $input.params('data')
+            }")
+            #set($data = $data.replaceAll("\t", ""))
+            #set($data = $data.replaceAll("\n", ""))
+            #set($data = $data + "
+            ")
+            {
+                "DeliveryStreamName": "${FirehoseStream}",
+                "Record": {
+                    "Data": "$util.base64Encode($data)"
+                }
+            }
+        RequestParameters:
+          integration.request.header.Content-Type: "'application/x-amz-json-1.1'"
+        IntegrationResponses:
+          - StatusCode: 200
+
+      MethodResponses:
+        - StatusCode: 200
+
+  ApiGatewayDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - CollectPostMethod
+      - CollectGetMethod
+    Properties:
+      RestApiId: !Ref CollectApi
+      StageName: v1
+
+  FirehoseRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - firehose.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: "/"
+      Policies:
+        - PolicyName: 'S3-access-policy'
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                - s3:AbortMultipartUpload
+                - s3:GetBucketLocation
+                - s3:GetObject
+                - s3:ListBucket
+                - s3:ListBucketMultipartUploads
+                - s3:PutObject
+                Resource:
+                - !Sub ${EventsBucket.Arn}/*
+                - !GetAtt EventsBucket.Arn
+
+  FirehoseStream:
+    Type: AWS::KinesisFirehose::DeliveryStream
+    Properties:
+      S3DestinationConfiguration:
+        BucketARN: !GetAtt EventsBucket.Arn
+        BufferingHints:
+          IntervalInSeconds: !Ref FirehoseBufferSeconds
+          SizeInMBs: !Ref FirehoseBufferMB
+        CompressionFormat: UNCOMPRESSED
+        Prefix: events/
+        RoleARN: !GetAtt FirehoseRole.Arn
+
+
+  EventsBucket:
+    Type: AWS::S3::Bucket
+    DependsOn: SNSTopic
+    DeletionPolicy: Retain
+    Properties:
+      # We need to configure S3 bucket name to avoid circular depedency in template
+      BucketName: !Sub ${AWS::StackName}-events
+      LifecycleConfiguration:
+        Rules:
+        - Id: expireAfter7days
+          ExpirationInDays: !Ref S3BucketExpirationDays
+          Status: Enabled
+      NotificationConfiguration:
+        TopicConfigurations:
+          - Event: 's3:ObjectCreated:*'
+            Topic: !Ref SNSTopic
+
+  SNSTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - !Ref SNSTopic
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Principal:
+            AWS: "*"
+          Action: sns:Publish
+          Resource: !Ref SNSTopic
+          Condition:
+            ArnLike:
+              "aws:SourceArn":  !Sub arn:aws:s3:::${AWS::StackName}-events
+
+  SNSTopic:
+    Type: AWS::SNS::Topic
+
+Outputs:
+  ApiId:
+    Value: !Ref CollectApi
+    Description: RestAPI ID
+    Export:
+      Name: !Sub ${AWS::StackName}-ApiId
+  SNSTopicArn:
+    Value: !Ref SNSTopic
+    Description: SNS Topic Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-SNSTopicArn
+  BucketArn:
+    Value: !Sub arn:aws:s3:::${AWS::StackName}-events
+    Description: S3 Bucket Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-BucketArn
+  BucketName:
+    Value: !Sub ${AWS::StackName}-events
+    Description: S3 Bucket Name
+    Export:
+      Name: !Sub ${AWS::StackName}-BucketName
