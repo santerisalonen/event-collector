@@ -19,4 +19,4 @@ node minify
 
 aws s3 cp dist/mt.min.js s3://${BUCKET} --region $REGION --acl public-read
 
-echo "https://s3.amazonaws.com/${BUCKET}/mt.min.js"
+echo "https://s3-${REGION}.amazonaws.com/${BUCKET}/mt.min.js"
